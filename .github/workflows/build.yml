@@ -46,7 +46,7 @@ jobs:
         # Only testing with MSVC on Windows arm64.
         - os: windows-11-arm
           compiler: clang
-        - os: windows-latest
+        - os: windows-11-arm
           compiler: gcc
         # Not testing fringe configurations (glog, shared libraries) on Windows x64.
         - os: windows-latest
