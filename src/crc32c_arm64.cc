@@ -20,8 +20,32 @@
 
 #if HAVE_ARM64_CRC32C
 
+#if defined(_MSC_VER)
+
+#include <intrin.h>
+#include <arm64_neon.h>
+
+// MSVC ARM64 vmull_p64 wrapper - handles polynomial multiplication
+inline uint64_t Arm64_Vmull_P64(uint64_t a, uint64_t b) {
+  __n64 na, nb;
+  na.n64_u64[0] = a;
+  nb.n64_u64[0] = b;
+  __n128 result = neon_pmull_64(na, nb);
+  return result.n128_u64[0];
+}
+
+#else
+
 #include <arm_acle.h>
 #include <arm_neon.h>
+
+// GCC/Clang version - handles polynomial multiplication
+inline uint64_t Arm64_Vmull_P64(uint64_t a, uint64_t b) {
+  poly128_t result = vmull_p64(a, b);
+  return vgetq_lane_u64(vreinterpretq_u64_p128(result), 0);
+}
+
+#endif
 
 #define KBYTES 1032
 #define SEGMENTBYTES 256
@@ -67,7 +91,7 @@ uint32_t ExtendArm64(uint32_t crc, const uint8_t *data, size_t size) {
 
   // k0=CRC(x^(3*SEGMENTBYTES*8)), k1=CRC(x^(2*SEGMENTBYTES*8)),
   // k2=CRC(x^(SEGMENTBYTES*8))
-  const poly64_t k0 = 0x8d96551c, k1 = 0xbd6f81f8, k2 = 0xdcb17aa4;
+  const uint64_t k0 = 0x8d96551c, k1 = 0xbd6f81f8, k2 = 0xdcb17aa4;
 
   crc = crc ^ kCRC32Xor;
 
@@ -81,9 +105,9 @@ uint32_t ExtendArm64(uint32_t crc, const uint8_t *data, size_t size) {
     CRC32C1024BYTES(data);
 
     // Merge the 4 partial CRC32C values.
-    t2 = (uint64_t)vmull_p64(crc2, k2);
-    t1 = (uint64_t)vmull_p64(crc1, k1);
-    t0 = (uint64_t)vmull_p64(crc0, k0);
+    t2 = Arm64_Vmull_P64(crc2, k2);
+    t1 = Arm64_Vmull_P64(crc1, k1);
+    t0 = Arm64_Vmull_P64(crc0, k0);
     crc = __crc32cd(crc3, ReadUint64LE(data));
     data += sizeof(uint64_t);
     crc ^= __crc32cd(0, t2);
