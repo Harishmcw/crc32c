@@ -14,6 +14,16 @@
 
 #if HAVE_ARM64_CRC32C
 
+#if defined(_MSC_VER)
+// MSVC ARM64: arm64_neon.h includes both NEON and ACLE intrinsics
+#include <intrin.h>
+#include <arm64_neon.h>
+#else
+// GCC/Clang: separate headers
+#include <arm_acle.h>
+#include <arm_neon.h>
+#endif
+
 namespace crc32c {
 
 uint32_t ExtendArm64(uint32_t crc, const uint8_t* data, size_t count);

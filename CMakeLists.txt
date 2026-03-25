@@ -139,19 +139,35 @@ set(CMAKE_REQUIRED_FLAGS ${OLD_CMAKE_REQURED_FLAGS})
 # Check for ARMv8 w/ CRC and CRYPTO extensions support in the compiler.
 set(OLD_CMAKE_REQURED_FLAGS ${CMAKE_REQUIRED_FLAGS})
 if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
-  # TODO(pwnall): Insert correct flag when VS gets ARM CRC32C support.
-  set(CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS} /arch:NOTYET")
+  # MSVC ARM64 builds have intrinsics available without special flags when
+  # targeting ARM64. For cross-compilation or emulation, use /arch:armv8.0
+  if(NOT (CMAKE_SYSTEM_PROCESSOR MATCHES "ARM64|arm64|aarch64" OR
+          CMAKE_GENERATOR_PLATFORM STREQUAL "ARM64"))
+    set(CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS} /arch:armv8.0")
+  endif()
 else(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
   set(CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS} -march=armv8-a+crc+crypto")
 endif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
 check_cxx_source_compiles("
+#if defined(_MSC_VER)
+#include <intrin.h>
+#include <arm64_neon.h>
+#else  // !defined(_MSC_VER)
 #include <arm_acle.h>
 #include <arm_neon.h>
+#endif  // defined(_MSC_VER)
 
 int main() {
   __crc32cb(0, 0); __crc32ch(0, 0); __crc32cw(0, 0); __crc32cd(0, 0);
+#if defined(_MSC_VER)
+  __n64 na, nb;
+  na.n64_u64[0] = 0;
+  nb.n64_u64[0] = 0;
+  neon_pmull_64(na, nb);
+#else  // !defined(_MSC_VER)
   vmull_p64(0, 0);
-  return 0;
+#endif  // defined(_MSC_VER)
+   return 0;
 }
 " HAVE_ARM64_CRC32C)
 set(CMAKE_REQUIRED_FLAGS ${OLD_CMAKE_REQURED_FLAGS})
@@ -228,8 +244,12 @@ target_sources(crc32c_arm64
 )
 if(HAVE_ARM64_CRC32C)
   if(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
-    # TODO(pwnall): Insert correct flag when VS gets ARM64 CRC32C support.
-    target_compile_options(crc32c_arm64 PRIVATE "/arch:NOTYET")
+    # MSVC ARM64 builds have intrinsics available without special flags when
+    # targeting ARM64. For cross-compilation or emulation, use /arch:armv8.0
+    if(NOT (CMAKE_SYSTEM_PROCESSOR MATCHES "ARM64|arm64|aarch64" OR
+            CMAKE_GENERATOR_PLATFORM STREQUAL "ARM64"))
+      target_compile_options(crc32c_arm64 PRIVATE "/arch:armv8.0")
+    endif()
   else(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     target_compile_options(crc32c_arm64 PRIVATE "-march=armv8-a+crc+crypto")
   endif(CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
